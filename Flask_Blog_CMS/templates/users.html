@@ -1,0 +1,169 @@
+{% extends "base.html" %}
+
+{% block title %}Users - Flask SQLAlchemy Blog{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h1>User Management</h1>
+    <p>Manage all users and view their posting activity.</p>
+</div>
+
+<div class="card">
+    <h2>Create New User</h2>
+    <form id="userForm">
+        <div class="form-group">
+            <label for="username">Username:</label>
+            <input type="text" id="username" name="username" required>
+        </div>
+        <div class="form-group">
+            <label for="email">Email:</label>
+            <input type="email" id="email" name="email" required>
+        </div>
+        <button type="submit" class="btn">Create User</button>
+    </form>
+    <div id="userAlert"></div>
+</div>
+
+<div class="card">
+    <h2>All Users</h2>
+    <div id="usersContainer">
+        <p>Loading users...</p>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Load users when page loads
+    document.addEventListener('DOMContentLoaded', function() {
+        loadUsers();
+    });
+    
+    // Show alert messages
+    function showAlert(message, type = 'success') {
+        const alertContainer = document.getElementById('userAlert');
+        alertContainer.innerHTML = `<div class="alert alert-${type}">${message}</div>`;
+        setTimeout(() => {
+            alertContainer.innerHTML = '';
+        }, 3000);
+    }
+    
+    // Create user form submission
+    document.getElementById('userForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        const formData = {
+            username: document.getElementById('username').value,
+            email: document.getElementById('email').value
+        };
+        
+        fetch('/api/users', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(formData)
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) {
+                showAlert(data.error, 'error');
+            } else {
+                showAlert('User created successfully!');
+                document.getElementById('userForm').reset();
+                loadUsers();
+            }
+        })
+        .catch(error => {
+            showAlert('Error creating user: ' + error.message, 'error');
+        });
+    });
+    
+    // Load all users
+    function loadUsers() {
+        fetch('/api/users')
+        .then(response => response.json())
+        .then(users => {
+            const container = document.getElementById('usersContainer');
+            
+            if (users.length === 0) {
+                container.innerHTML = '<p>No users found. Create your first user above!</p>';
+                return;
+            }
+            
+            let usersHTML = `
+                <div style="display: grid; gap: 1rem;">
+            `;
+            
+            users.forEach(user => {
+                usersHTML += `
+                    <div class="user-item">
+                        <div style="display: flex; justify-content: space-between; align-items: start;">
+                            <div>
+                                <h3>${user.username}</h3>
+                                <p><strong>Email:</strong> ${user.email}</p>
+                                <p><strong>Posts:</strong> ${user.posts_count}</p>
+                                <div class="user-meta">
+                                    <strong>Joined:</strong> ${new Date(user.created_at).toLocaleDateString()} at ${new Date(user.created_at).toLocaleTimeString()}
+                                </div>
+                            </div>
+                            <div>
+                                <button class="btn" onclick="viewUserPosts(${user.id}, '${user.username}')" style="margin-left: 1rem;">
+                                    View Posts
+                                </button>
+                            </div>
+                        </div>
+                        <div id="userPosts${user.id}" style="margin-top: 1rem; display: none;"></div>
+                    </div>
+                `;
+            });
+            
+            usersHTML += '</div>';
+            container.innerHTML = usersHTML;
+        })
+        .catch(error => {
+            document.getElementById('usersContainer').innerHTML = '<p>Error loading users.</p>';
+        });
+    }
+    
+    // View posts for a specific user
+    function viewUserPosts(userId, username) {
+        const postsContainer = document.getElementById(`userPosts${userId}`);
+        
+        if (postsContainer.style.display === 'none') {
+            postsContainer.style.display = 'block';
+            postsContainer.innerHTML = '<p>Loading posts...</p>';
+            
+            fetch('/api/posts')
+            .then(response => response.json())
+            .then(allPosts => {
+                // Filter posts by user
+                const userPosts = allPosts.filter(post => post.author === username);
+                
+                if (userPosts.length === 0) {
+                    postsContainer.innerHTML = `<p><em>No posts by ${username} yet.</em></p>`;
+                    return;
+                }
+                
+                let postsHTML = `<h4>Posts by ${username}:</h4>`;
+                userPosts.forEach(post => {
+                    postsHTML += `
+                        <div style="background: #f8f9fa; padding: 1rem; margin: 0.5rem 0; border-radius: 5px; border-left: 3px solid #667eea;">
+                            <h5>${post.title}</h5>
+                            <p>${post.content.substring(0, 150)}${post.content.length > 150 ? '...' : ''}</p>
+                            <small>Posted on ${new Date(post.created_at).toLocaleDateString()}</small>
+                        </div>
+                    `;
+                });
+                
+                postsContainer.innerHTML = postsHTML;
+            })
+            .catch(error => {
+                postsContainer.innerHTML = '<p>Error loading posts.</p>';
+            });
+        } else {
+            postsContainer.style.display = 'none';
+        }
+    }
+</script>
+{% endblock %}
